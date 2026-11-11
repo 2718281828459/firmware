@@ -4,6 +4,11 @@
 
 #include "AudioBoard.h"
 
+// Codec output level for notification tones, 0-100. Stock firmware uses 75, which is very loud.
+#ifndef PAGER_AUDIO_VOLUME
+#define PAGER_AUDIO_VOLUME 30
+#endif
+
 DriverPins PinsAudioBoardES8311;
 AudioBoard board(AudioDriverES8311, PinsAudioBoardES8311);
 
@@ -23,6 +28,6 @@ void lateInitVariant()
     cfg.i2s.bits = BIT_LENGTH_16BITS;
     cfg.i2s.rate = RATE_44K;
     board.begin(cfg);
-    board.setVolume(75); // 75% volume
+    board.setVolume(PAGER_AUDIO_VOLUME);
 }
 #endif
