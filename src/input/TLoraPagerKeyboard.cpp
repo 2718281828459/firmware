@@ -2,6 +2,7 @@
 
 #include "TLoraPagerKeyboard.h"
 #include "main.h"
+#include "platform/extra_variants/t_lora_pager/PagerNotifications.h"
 
 #ifndef LEDC_BACKLIGHT_CHANNEL
 #define LEDC_BACKLIGHT_CHANNEL 4
@@ -27,6 +28,12 @@ constexpr uint8_t modifierRightShiftKey = 29 - 1; // keynum -1
 constexpr uint8_t modifierRightShift = 0b0001;
 constexpr uint8_t modifierSymKey = 21 - 1;
 constexpr uint8_t modifierSym = 0b0010;
+
+// Sound shortcuts on the otherwise unused Shift layer of the right-hand keys:
+// Shift+Enter (upper key) = louder, Shift+Backspace (below it) = quieter, Shift+Space = mute / unmute.
+constexpr uint8_t keyEnter = 20 - 1;
+constexpr uint8_t keyBackspace = 30 - 1;
+constexpr uint8_t keySpace = 31 - 1;
 
 // Num chars per key, Modulus for rotating through characters
 static uint8_t TLoraPagerTapMod[_TCA8418_NUM_KEYS] = {3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,
@@ -177,6 +184,17 @@ void TLoraPagerKeyboard::released()
 
     uint32_t now = millis();
     last_tap = now;
+
+    if (modifierFlag == modifierRightShift && (last_key == keyEnter || last_key == keyBackspace || last_key == keySpace)) {
+        modifierFlag = 0;
+        if (last_key == keyEnter)
+            PagerNotifications::volumeUp();
+        else if (last_key == keyBackspace)
+            PagerNotifications::volumeDown();
+        else
+            PagerNotifications::toggleMute();
+        return;
+    }
 
     if (TLoraPagerTapMap[last_key][modifierFlag % TLoraPagerTapMod[last_key]] == Key::BL_TOGGLE) {
         toggleBacklight();

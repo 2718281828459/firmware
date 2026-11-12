@@ -48,6 +48,7 @@ uint8_t NotificationRenderer::alertBannerOptions = 0; // last x lines are select
 const char **NotificationRenderer::optionsArrayPtr = nullptr;
 const int *NotificationRenderer::optionsEnumPtr = nullptr;
 std::function<void(int)> NotificationRenderer::alertBannerCallback = NULL;
+std::function<void(int)> NotificationRenderer::selectionChangedCallback = NULL;
 bool NotificationRenderer::pauseBanner = false;
 notificationTypeEnum NotificationRenderer::current_notification_type = notificationTypeEnum::none;
 uint32_t NotificationRenderer::numDigits = 0;
@@ -99,6 +100,7 @@ void NotificationRenderer::resetBanner()
     alertBannerOptions = 0; // last x lines are selectable options
     optionsArrayPtr = nullptr;
     optionsEnumPtr = nullptr;
+    selectionChangedCallback = nullptr;
     alertBannerCallback = NULL;
     pauseBanner = false;
     numDigits = 0;
@@ -400,6 +402,7 @@ void NotificationRenderer::drawAlertBannerOverlay(OLEDDisplay *display, OLEDDisp
 
     // Handle input
     if (alertBannerOptions > 0) {
+        const int8_t previousSelected = curSelected;
         if (inEvent.inputEvent == INPUT_BROKER_UP || inEvent.inputEvent == INPUT_BROKER_LEFT ||
             inEvent.inputEvent == INPUT_BROKER_ALT_PRESS || inEvent.inputEvent == INPUT_BROKER_UP_LONG) {
             curSelected--;
@@ -425,6 +428,9 @@ void NotificationRenderer::drawAlertBannerOverlay(OLEDDisplay *display, OLEDDisp
             curSelected = alertBannerOptions - 1;
         if (curSelected == alertBannerOptions)
             curSelected = 0;
+        if (curSelected != previousSelected && selectionChangedCallback) {
+            selectionChangedCallback(optionsEnumPtr != nullptr ? optionsEnumPtr[curSelected] : curSelected);
+        }
     } else {
         if (inEvent.inputEvent == INPUT_BROKER_SELECT || inEvent.inputEvent == INPUT_BROKER_ALT_LONG ||
             inEvent.inputEvent == INPUT_BROKER_CANCEL) {

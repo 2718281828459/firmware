@@ -91,6 +91,10 @@ class ExternalNotificationModule : public SinglePortModule, private concurrency:
 
     bool isSilenced = false;
 
+    // DRV2605 runs for this alert; on the T-LoRa Pager it follows the vibra flags instead of always.
+    bool hapticActive = true;
+    void playHapticPattern();
+
     virtual AdminMessageHandleResult handleAdminMessageForModule(const meshtastic_MeshPacket &mp,
                                                                  meshtastic_AdminMessage *request,
                                                                  meshtastic_AdminMessage *response) override;

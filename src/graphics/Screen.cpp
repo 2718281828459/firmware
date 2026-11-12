@@ -221,6 +221,7 @@ void Screen::showOverlayBanner(BannerOverlayOptions banner_overlay_options)
     NotificationRenderer::optionsEnumPtr = banner_overlay_options.optionsEnumPtr;
     NotificationRenderer::alertBannerOptions = banner_overlay_options.optionsCount;
     NotificationRenderer::alertBannerCallback = banner_overlay_options.bannerCallback;
+    NotificationRenderer::selectionChangedCallback = banner_overlay_options.selectionChangedCallback;
     NotificationRenderer::curSelected = banner_overlay_options.InitialSelected;
     NotificationRenderer::pauseBanner = false;
     NotificationRenderer::current_notification_type = notificationTypeEnum::selection_picker;

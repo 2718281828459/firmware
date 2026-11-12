@@ -127,7 +127,8 @@ int32_t ExternalNotificationModule::runOnce()
 #endif
 
 #ifdef HAS_DRV2605
-            drv.go();
+            if (hapticActive)
+                drv.go();
 #endif
         }
 
@@ -169,6 +170,21 @@ bool ExternalNotificationModule::canBuzz()
         return true;
     }
     return false;
+}
+
+void ExternalNotificationModule::playHapticPattern()
+{
+#ifdef HAS_DRV2605
+    drv.setWaveform(0, 16); // Long buzzer 100%
+    drv.setWaveform(1, 0);  // Pause
+    drv.setWaveform(2, 16);
+    drv.setWaveform(3, 0);
+    drv.setWaveform(4, 16);
+    drv.setWaveform(5, 0);
+    drv.setWaveform(6, 16);
+    drv.setWaveform(7, 0);
+    drv.go();
+#endif
 }
 
 bool ExternalNotificationModule::wantPacket(const meshtastic_MeshPacket *p)
@@ -226,7 +242,8 @@ void ExternalNotificationModule::setExternalState(uint8_t index, bool on)
 
 #ifdef HAS_DRV2605
     if (on) {
-        drv.go();
+        if (hapticActive)
+            drv.go();
     } else {
         drv.stop();
     }
@@ -266,6 +283,9 @@ void ExternalNotificationModule::stopNow()
 
     // Prevent the state machine from immediately re-triggering outputs after a manual stop.
     isNagging = false;
+#ifdef T_LORA_PAGER
+    hapticActive = false;
+#endif
     nagCycleCutoff = UINT32_MAX;
 
 #ifdef HAS_I2S
@@ -397,15 +417,31 @@ ProcessMessage ExternalNotificationModule::handleReceived(const meshtastic_MeshP
             const bool genericShouldAlert = (moduleConfig.external_notification.alert_bell && containsBell) ||
                                             (moduleConfig.external_notification.alert_message && !is_muted);
 
+            // In DIRECT_MSG_ONLY mode the buzzer only sounds for DMs to us (or a bell).
+            const bool directOnlySuppressed = buzzerModeIsDirectOnly && !isDmToUs && !containsBell;
+
             // Alert GPIO Vibra when receiving a bell = alertBellVibra: true
             // Alert GPIO Vibra when receiving a message = alertMessageVibra: true
-            const bool vibraShouldAlert = (moduleConfig.external_notification.alert_bell_vibra && containsBell) ||
-                                          (moduleConfig.external_notification.alert_message_vibra && !is_muted);
+            bool vibraShouldAlert = (moduleConfig.external_notification.alert_bell_vibra && containsBell) ||
+                                    (moduleConfig.external_notification.alert_message_vibra && !is_muted);
+#ifdef T_LORA_PAGER
+            // The pager's "Alert me for: DMs only" covers vibration as well as sound.
+            vibraShouldAlert = vibraShouldAlert && !directOnlySuppressed;
+#endif
 
             // Alert GPIO Buzzer when receiving a bell = alertBellBuzzer: true
             // Alert GPIO Buzzer when receiving a message = alertMessageBuzzer: true
-            const bool buzzerShouldAlert = canBuzz() && ((moduleConfig.external_notification.alert_bell_buzzer && containsBell) ||
-                                                         (moduleConfig.external_notification.alert_message_buzzer && !is_muted));
+            const bool buzzerRequested = canBuzz() && ((moduleConfig.external_notification.alert_bell_buzzer && containsBell) ||
+                                                       (moduleConfig.external_notification.alert_message_buzzer && !is_muted));
+            if (buzzerRequested && directOnlySuppressed) {
+                LOG_INFO("Message buzzer was suppressed because buzzer mode DIRECT_MSG_ONLY");
+            }
+            // A suppressed buzzer must not start the nag cycle either, or the ringtone would replay from runOnce().
+            const bool buzzerShouldAlert = buzzerRequested && !directOnlySuppressed;
+
+#if defined(HAS_DRV2605) && defined(T_LORA_PAGER)
+            hapticActive = vibraShouldAlert;
+#endif
 
             if (genericShouldAlert || vibraShouldAlert || buzzerShouldAlert) {
                 nagCycleCutoff = millis() + (moduleConfig.external_notification.nag_timeout
@@ -423,35 +459,25 @@ ProcessMessage ExternalNotificationModule::handleReceived(const meshtastic_MeshP
             if (vibraShouldAlert) {
                 LOG_INFO("externalNotificationModule - Vibra alert");
                 setExternalState(1, true);
+#if defined(HAS_DRV2605) && defined(T_LORA_PAGER)
+                playHapticPattern();
+#endif
             }
 
             if (buzzerShouldAlert) {
                 LOG_INFO("externalNotificationModule - Buzzer alert");
-                if (buzzerModeIsDirectOnly && !isDmToUs && !containsBell) {
-                    LOG_INFO("Message buzzer was suppressed because buzzer mode DIRECT_MSG_ONLY");
-                } else {
-                    // Buzz if buzzer mode is not in DIRECT_MSG_ONLY or is DM to us
-#ifdef HAS_DRV2605
-                    drv.setWaveform(0, 16); // Long buzzer 100%
-                    drv.setWaveform(1, 0);  // Pause
-                    drv.setWaveform(2, 16);
-                    drv.setWaveform(3, 0);
-                    drv.setWaveform(4, 16);
-                    drv.setWaveform(5, 0);
-                    drv.setWaveform(6, 16);
-                    drv.setWaveform(7, 0);
-                    drv.go();
+#if defined(HAS_DRV2605) && !defined(T_LORA_PAGER)
+                playHapticPattern();
 #endif
 
-                    if (moduleConfig.external_notification.use_i2s_as_buzzer) {
+                if (moduleConfig.external_notification.use_i2s_as_buzzer) {
 #ifdef HAS_I2S
-                        audioThread->beginRttl(rtttlConfig.ringtone, strlen_P(rtttlConfig.ringtone));
+                    audioThread->beginRttl(rtttlConfig.ringtone, strlen_P(rtttlConfig.ringtone));
 #endif
-                    } else if (moduleConfig.external_notification.use_pwm) {
-                        rtttl::begin(config.device.buzzer_gpio, rtttlConfig.ringtone);
-                    } else {
-                        setExternalState(2, true);
-                    }
+                } else if (moduleConfig.external_notification.use_pwm) {
+                    rtttl::begin(config.device.buzzer_gpio, rtttlConfig.ringtone);
+                } else {
+                    setExternalState(2, true);
                 }
             }
 

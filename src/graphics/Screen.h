@@ -21,6 +21,9 @@ struct BannerOverlayOptions {
     const int *optionsEnumPtr = nullptr;
     uint8_t optionsCount = 0;
     std::function<void(int)> bannerCallback = nullptr;
+    // Optional: called with the highlighted option (enum value if optionsEnumPtr is set) each time the
+    // selection moves, e.g. to preview a sound level while turning the knob.
+    std::function<void(int)> selectionChangedCallback = nullptr;
     int8_t InitialSelected = 0;
     notificationTypeEnum notificationType = notificationTypeEnum::text_banner;
 };

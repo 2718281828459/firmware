@@ -27,6 +27,9 @@
 #include <array>
 #include <functional>
 #include <utility>
+#ifdef T_LORA_PAGER
+#include "platform/extra_variants/t_lora_pager/PagerNotifications.h"
+#endif
 
 extern uint16_t TFT_MESH;
 
@@ -1083,7 +1086,11 @@ void menuHandler::systemBaseMenu()
     bannerOptions.optionsEnumPtr = optionsEnumArray;
     bannerOptions.bannerCallback = [](int selected) -> void {
         if (selected == Notifications) {
+#ifdef T_LORA_PAGER
+            menuHandler::menuQueue = menuHandler::PagerNotificationsMenu;
+#else
             menuHandler::menuQueue = menuHandler::BuzzerModeMenuPicker;
+#endif
             screen->runNow();
         } else if (selected == ScreenOptions) {
             menuHandler::menuQueue = menuHandler::ScreenOptionsMenu;
@@ -1966,6 +1973,135 @@ void menuHandler::BuzzerModeMenu()
     screen->showOverlayBanner(bannerOptions);
 }
 
+#ifdef T_LORA_PAGER
+// ---- T-LoRa Pager: Notifications (sound level, vibrate, what to alert for, repeat) ----
+
+static void returnToPagerNotificationsMenu()
+{
+    menuHandler::menuQueue = menuHandler::PagerNotificationsMenu;
+    screen->runNow();
+}
+
+void menuHandler::pagerNotificationsMenu()
+{
+    enum optionsNumbers { Back, Sound, Vibrate, AlertFor, Repeat, enumEnd };
+    static const char *optionsArray[enumEnd];
+    static char soundLabel[24], vibrateLabel[24], alertLabel[32], repeatLabel[32];
+    static int8_t lastItem = Sound;
+
+    PagerNotifications::syncFromConfig(); // the phone app may have changed something
+    const uint8_t level = PagerNotifications::soundLevel();
+    if (level == 0)
+        snprintf(soundLabel, sizeof(soundLabel), "Sound: Off");
+    else
+        snprintf(soundLabel, sizeof(soundLabel), "Sound: %u", level);
+    snprintf(vibrateLabel, sizeof(vibrateLabel), "Vibrate: %s", PagerNotifications::vibrate() ? "On" : "Off");
+    static const char *scopeNames[] = {"All", "DMs only", "Nothing"};
+    snprintf(alertLabel, sizeof(alertLabel), "Alert me for: %s", scopeNames[(int)PagerNotifications::alertScope()]);
+    snprintf(repeatLabel, sizeof(repeatLabel), "Repeat: %s",
+             PagerNotifications::repeat() == PagerNotifications::Repeat::Once ? "Once" : "Until read");
+
+    optionsArray[Back] = "Back";
+    optionsArray[Sound] = soundLabel;
+    optionsArray[Vibrate] = vibrateLabel;
+    optionsArray[AlertFor] = alertLabel;
+    optionsArray[Repeat] = repeatLabel;
+
+    BannerOverlayOptions bannerOptions;
+    bannerOptions.message = "Notifications";
+    bannerOptions.optionsArrayPtr = optionsArray;
+    bannerOptions.optionsCount = enumEnd;
+    bannerOptions.InitialSelected = lastItem;
+    bannerOptions.bannerCallback = [](int selected) -> void {
+        lastItem = selected;
+        switch (selected) {
+        case Sound:
+            menuQueue = PagerSoundPicker;
+            break;
+        case Vibrate:
+            menuQueue = PagerVibratePicker;
+            break;
+        case AlertFor:
+            menuQueue = PagerAlertScopePicker;
+            break;
+        case Repeat:
+            menuQueue = PagerRepeatPicker;
+            break;
+        default:
+            lastItem = Sound;
+            return;
+        }
+        screen->runNow();
+    };
+    screen->showOverlayBanner(bannerOptions);
+}
+
+void menuHandler::pagerSoundPicker()
+{
+    static const char *optionsArray[] = {"Off", "1", "2", "3", "4", "5"};
+    BannerOverlayOptions bannerOptions;
+    bannerOptions.message = "Sound\nTurn to hear each level";
+    bannerOptions.optionsArrayPtr = optionsArray;
+    bannerOptions.optionsCount = PagerNotifications::MAX_LEVEL + 1;
+    bannerOptions.InitialSelected = PagerNotifications::soundLevel();
+    bannerOptions.selectionChangedCallback = [](int selected) -> void { PagerNotifications::previewLevel(selected); };
+    bannerOptions.bannerCallback = [](int selected) -> void {
+        PagerNotifications::setSoundLevel(selected);
+        returnToPagerNotificationsMenu();
+    };
+    screen->showOverlayBanner(bannerOptions);
+}
+
+void menuHandler::pagerVibratePicker()
+{
+    static const char *optionsArray[] = {"Off", "On"};
+    BannerOverlayOptions bannerOptions;
+    bannerOptions.message = "Vibrate";
+    bannerOptions.optionsArrayPtr = optionsArray;
+    bannerOptions.optionsCount = 2;
+    bannerOptions.InitialSelected = PagerNotifications::vibrate() ? 1 : 0;
+    bannerOptions.selectionChangedCallback = [](int selected) -> void {
+        if (selected == 1)
+            PagerNotifications::previewVibrate();
+    };
+    bannerOptions.bannerCallback = [](int selected) -> void {
+        PagerNotifications::setVibrate(selected == 1);
+        returnToPagerNotificationsMenu();
+    };
+    screen->showOverlayBanner(bannerOptions);
+}
+
+void menuHandler::pagerAlertScopePicker()
+{
+    static const char *optionsArray[] = {"All messages", "DMs only", "Nothing"};
+    BannerOverlayOptions bannerOptions;
+    bannerOptions.message = "Alert me for";
+    bannerOptions.optionsArrayPtr = optionsArray;
+    bannerOptions.optionsCount = 3;
+    bannerOptions.InitialSelected = (int8_t)PagerNotifications::alertScope();
+    bannerOptions.bannerCallback = [](int selected) -> void {
+        PagerNotifications::setAlertScope((PagerNotifications::AlertScope)selected);
+        returnToPagerNotificationsMenu();
+    };
+    screen->showOverlayBanner(bannerOptions);
+}
+
+void menuHandler::pagerRepeatPicker()
+{
+    static const char *optionsArray[] = {"Once", "Until read"};
+    BannerOverlayOptions bannerOptions;
+    bannerOptions.message = "Repeat alert";
+    bannerOptions.optionsArrayPtr = optionsArray;
+    bannerOptions.optionsCount = 2;
+    bannerOptions.InitialSelected = (int8_t)PagerNotifications::repeat();
+    bannerOptions.bannerCallback = [](int selected) -> void {
+        PagerNotifications::setRepeat((PagerNotifications::Repeat)selected);
+        returnToPagerNotificationsMenu();
+    };
+    screen->showOverlayBanner(bannerOptions);
+}
+#endif
+
 void menuHandler::BrightnessPickerMenu()
 {
     static const char *optionsArray[] = {"Back", "Low", "Medium", "High"};
@@ -2725,6 +2861,23 @@ void menuHandler::handleMenuSwitch(OLEDDisplay *display)
     case BuzzerModeMenuPicker:
         BuzzerModeMenu();
         break;
+#ifdef T_LORA_PAGER
+    case PagerNotificationsMenu:
+        pagerNotificationsMenu();
+        break;
+    case PagerSoundPicker:
+        pagerSoundPicker();
+        break;
+    case PagerVibratePicker:
+        pagerVibratePicker();
+        break;
+    case PagerAlertScopePicker:
+        pagerAlertScopePicker();
+        break;
+    case PagerRepeatPicker:
+        pagerRepeatPicker();
+        break;
+#endif
     case MuiPicker:
         switchToMUIMenu();
         break;

@@ -24,6 +24,7 @@ class NotificationRenderer
     static const int *optionsEnumPtr;
     static uint8_t alertBannerOptions; // last x lines are selectable options
     static std::function<void(int)> alertBannerCallback;
+    static std::function<void(int)> selectionChangedCallback;
     static uint32_t numDigits;
     static uint32_t currentNumber;
     static VirtualKeyboard *virtualKeyboard;

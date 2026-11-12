@@ -55,7 +55,12 @@ class menuHandler
         NodeNameLengthMenu,
         FrameToggles,
         DisplayUnits,
-        MessageBubblesMenu
+        MessageBubblesMenu,
+        PagerNotificationsMenu,
+        PagerSoundPicker,
+        PagerVibratePicker,
+        PagerAlertScopePicker,
+        PagerRepeatPicker
     };
     static screenMenus menuQueue;
     static uint32_t pickedNodeNum; // node selected by NodePicker for ManageNodeMenu
@@ -88,6 +93,13 @@ class menuHandler
     static void GPSUpdateIntervalMenu();
     static void GPSPositionBroadcastMenu();
     static void BuzzerModeMenu();
+#ifdef T_LORA_PAGER
+    static void pagerNotificationsMenu();
+    static void pagerSoundPicker();
+    static void pagerVibratePicker();
+    static void pagerAlertScopePicker();
+    static void pagerRepeatPicker();
+#endif
     static void switchToMUIMenu();
     static void TFTColorPickerMenu(OLEDDisplay *display);
     static void nodeListMenu();
