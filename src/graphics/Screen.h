@@ -253,6 +253,9 @@ class Screen : public concurrency::OSThread
     OLEDDISPLAY_GEOMETRY geometry;
 
     bool isOverlayBannerShowing();
+#ifdef T_LORA_PAGER
+    bool isTextMessageFrameShowing();
+#endif
 
     bool isScreenOn() { return screenOn; }
 

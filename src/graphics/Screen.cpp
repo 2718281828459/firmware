@@ -67,6 +67,9 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 #include "modules/WaypointModule.h"
 #include "sleep.h"
 #include "target_specific.h"
+#ifdef T_LORA_PAGER
+#include "platform/extra_variants/t_lora_pager/PagerReadingMode.h"
+#endif
 extern MessageStore messageStore;
 
 #if USE_TFTDISPLAY
@@ -1842,8 +1845,18 @@ int Screen::handleInputEvent(const InputEvent *event)
         menuHandler::handleMenuSwitch(dispdev);
         return 0;
     }
+#ifdef T_LORA_PAGER
+    if (PagerReadingMode::active() && ui->getUiState()->currentFrame != framesetInfo.positions.textMessage)
+        PagerReadingMode::exit();
+#endif
     // UP/DOWN in message screen scrolls through message threads
     if (ui->getUiState()->currentFrame == framesetInfo.positions.textMessage) {
+#ifdef T_LORA_PAGER
+        if (PagerReadingMode::handleMessageFrameInput(event)) {
+            setFastFramerate();
+            return 0;
+        }
+#endif
 
         if (event->inputEvent == INPUT_BROKER_UP) {
             if (messageStore.getMessages().empty()) {
@@ -2034,6 +2047,14 @@ bool Screen::isOverlayBannerShowing()
 {
     return NotificationRenderer::isOverlayBannerShowing();
 }
+
+#ifdef T_LORA_PAGER
+bool Screen::isTextMessageFrameShowing()
+{
+    return showingNormalScreen && framesetInfo.positions.textMessage != 255 &&
+           ui->getUiState()->currentFrame == framesetInfo.positions.textMessage;
+}
+#endif
 
 } // namespace graphics
 

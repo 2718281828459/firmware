@@ -3,6 +3,8 @@
 #include "RotaryEncoderImpl.h"
 #include "InputBroker.h"
 #include "RotaryEncoder.h"
+#include "mesh/Throttle.h"
+#include "platform/extra_variants/t_lora_pager/PagerReadingMode.h"
 #ifdef ARCH_ESP32
 #include "sleep.h"
 #endif
@@ -65,13 +67,32 @@ void RotaryEncoderImpl::pollOnce()
     InputEvent e{ORIGIN_NAME, INPUT_BROKER_NONE, 0, 0, 0};
 
     static uint32_t lastPressed = millis();
-    if (rotary->readButton() == RotaryEncoder::ButtonState::BUTTON_PRESSED) {
-        if (lastPressed + 200 < millis()) {
+    // On the messages screen a long press opens the menu, so decide on release; elsewhere fire on press as before.
+    static bool knobDown = false;
+    static bool deferred = false;
+    static uint32_t knobDownAt = 0;
+    const bool pressed = rotary->readButton() == RotaryEncoder::ButtonState::BUTTON_PRESSED;
+    if (pressed && !knobDown) {
+        knobDown = true;
+        knobDownAt = millis();
+        deferred = PagerReadingMode::wantsKnobLongPress();
+        if (!deferred && !Throttle::isWithinTimespanMs(lastPressed, 200)) {
             LOG_DEBUG("Rotary event Press");
             lastPressed = millis();
             e.inputEvent = this->eventPressed;
             inputBroker->queueInputEvent(&e);
         }
+    } else if (!pressed && knobDown) {
+        knobDown = false;
+        const bool bounce = Throttle::isWithinTimespanMs(knobDownAt, 30);
+        if (deferred && !bounce && !Throttle::isWithinTimespanMs(lastPressed, 200)) {
+            const bool isLong = !Throttle::isWithinTimespanMs(knobDownAt, PagerReadingMode::LONG_PRESS_MS);
+            LOG_DEBUG("Rotary event %s", isLong ? "Long press" : "Press");
+            lastPressed = millis();
+            e.inputEvent = isLong ? INPUT_BROKER_SELECT_LONG : this->eventPressed;
+            inputBroker->queueInputEvent(&e);
+        }
+        deferred = false;
     }
 
     switch (rotary->process()) {

@@ -15,6 +15,9 @@
 #include "graphics/emotes.h"
 #include "main.h"
 #include "meshUtils.h"
+#ifdef T_LORA_PAGER
+#include "platform/extra_variants/t_lora_pager/PagerReadingMode.h"
+#endif
 #include <string>
 #include <vector>
 
@@ -70,6 +73,43 @@ void scrollDown()
     if (scrollY > maxScroll)
         scrollY = maxScroll;
 }
+
+#ifdef T_LORA_PAGER
+void startManualScroll()
+{
+    resetScrollState();
+    didReset = true; // keep the next frame draw from resetting us back to autoscroll
+    manualScrolling = true;
+}
+
+bool isManualScrolling()
+{
+    return manualScrolling;
+}
+
+static void drawReadingIndicator(OLEDDisplay *display, int visibleHeight, int totalHeight, int scrollOffset, int startY)
+{
+    const int barX = display->getWidth() - 4;
+    if (totalHeight > visibleHeight) {
+        int thumbHeight = std::max(8, (visibleHeight * visibleHeight) / totalHeight);
+        int maxScroll = std::max(1, totalHeight - visibleHeight);
+        int thumbY = startY + (visibleHeight - thumbHeight) * std::min(scrollOffset, maxScroll) / maxScroll;
+        display->drawRect(barX - 1, startY, 5, visibleHeight);
+        display->fillRect(barX, thumbY, 3, thumbHeight);
+    }
+
+    const char *label = "Reading";
+    display->setFont(FONT_SMALL);
+    const int w = display->getStringWidth(label) + 6;
+    const int x = barX - 4 - w;
+    display->setColor(BLACK);
+    display->fillRect(x, startY, w, FONT_HEIGHT_SMALL);
+    display->setColor(WHITE);
+    display->drawRect(x, startY, w, FONT_HEIGHT_SMALL);
+    display->setTextAlignment(TEXT_ALIGN_LEFT);
+    display->drawString(x + 3, startY, label);
+}
+#endif
 
 void drawStringWithEmotes(OLEDDisplay *display, int x, int y, const std::string &line, const Emote *emotes, int emoteCount)
 {
@@ -825,7 +865,12 @@ void drawTextMessageFrame(OLEDDisplay *display, OLEDDisplayUiState *state, int16
     }
 
     // Draw scrollbar
-    drawMessageScrollbar(display, usableHeight, totalHeight, finalScroll, getTextPositions(display)[1]);
+#ifdef T_LORA_PAGER
+    if (PagerReadingMode::active())
+        drawReadingIndicator(display, usableHeight, totalHeight, finalScroll, getTextPositions(display)[1]);
+    else
+#endif
+        drawMessageScrollbar(display, usableHeight, totalHeight, finalScroll, getTextPositions(display)[1]);
     graphics::drawCommonHeader(display, x, y, titleStr);
     graphics::drawCommonFooter(display, x, y);
 }

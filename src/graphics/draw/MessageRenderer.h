@@ -66,6 +66,12 @@ void clearMessageCache();
 void scrollUp();
 void scrollDown();
 
+#ifdef T_LORA_PAGER
+// Show the newest message with autoscroll off, for the pager's reading mode.
+void startManualScroll();
+bool isManualScrolling();
+#endif
+
 } // namespace MessageRenderer
 } // namespace graphics
 #endif
